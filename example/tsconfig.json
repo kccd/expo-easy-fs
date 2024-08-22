@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "expo-easy-fs": ["../src/index"],
+      "expo-easy-fs/*": ["../src/*"]
+    }
+  }
+}
