@@ -1,26 +1,13 @@
-import { NativeModulesProxy, EventEmitter, Subscription } from 'expo-modules-core';
+import { Platform } from "react-native";
 
-// Import the native module. On web, it will be resolved to ExpoEasyFs.web.ts
-// and on native platforms to ExpoEasyFs.ts
-import ExpoEasyFsModule from './ExpoEasyFsModule';
-import ExpoEasyFsView from './ExpoEasyFsView';
-import { ChangeEventPayload, ExpoEasyFsViewProps } from './ExpoEasyFs.types';
+import ExpoEasyFsModule from "./ExpoEasyFsModule";
 
-// Get the native constant value.
-export const PI = ExpoEasyFsModule.PI;
-
-export function hello(): string {
-  return ExpoEasyFsModule.hello();
+export function copyFileToDownload(
+  uri: string,
+  filename: string,
+): Promise<void> {
+  if (Platform.OS !== "android") {
+    throw new Error(`Not yet supported on ${Platform.OS}`);
+  }
+  return ExpoEasyFsModule.copyFileToDownload(uri, filename);
 }
-
-export async function setValueAsync(value: string) {
-  return await ExpoEasyFsModule.setValueAsync(value);
-}
-
-const emitter = new EventEmitter(ExpoEasyFsModule ?? NativeModulesProxy.ExpoEasyFs);
-
-export function addChangeListener(listener: (event: ChangeEventPayload) => void): Subscription {
-  return emitter.addListener<ChangeEventPayload>('onChange', listener);
-}
-
-export { ExpoEasyFsView, ExpoEasyFsViewProps, ChangeEventPayload };

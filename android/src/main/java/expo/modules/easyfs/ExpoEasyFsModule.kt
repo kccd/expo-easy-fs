@@ -1,46 +1,50 @@
 package expo.modules.easyfs
 
+import expo.modules.kotlin.Promise
+import java.io.IOException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import android.os.Environment
+
+import android.content.ContentResolver
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
 
 class ExpoEasyFsModule : Module() {
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
   override fun definition() = ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('ExpoEasyFs')` in JavaScript.
     Name("ExpoEasyFs")
 
-    // Sets constant properties on the module. Can take a dictionary or a closure that returns a dictionary.
-    Constants(
-      "PI" to Math.PI
-    )
+    AsyncFunction("copyFileToDownload") { uri: String, filename: String, promise: Promise ->
+      val reactContext = appContext.reactContext
 
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
+      if (reactContext == null) {
+        promise.reject("ERR_CONTEXT_NULL", "React context is null", null)
+        return@AsyncFunction
+      }
+      try {
+        val contentResolver: ContentResolver = reactContext.contentResolver
+        val inputStream: InputStream? = contentResolver.openInputStream(android.net.Uri.parse(uri))
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val file = File(downloadsDir, filename)
 
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      "Hello world! 👋"
-    }
+        if (inputStream != null) {
+          val outputStream = FileOutputStream(file)
+          val buffer = ByteArray(1024)
+          var bytesRead: Int
 
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { value: String ->
-      // Send an event to JavaScript.
-      sendEvent("onChange", mapOf(
-        "value" to value
-      ))
-    }
+          while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+            outputStream.write(buffer, 0, bytesRead)
+          }
 
-    // Enables the module to be used as a native view. Definition components that are accepted as part of
-    // the view definition: Prop, Events.
-    View(ExpoEasyFsView::class) {
-      // Defines a setter for the `name` prop.
-      Prop("name") { view: ExpoEasyFsView, prop: String ->
-        println(prop)
+          inputStream.close()
+          outputStream.close()
+          promise.resolve("File copied successfully to: ${file.absolutePath}")
+        } else {
+          promise.reject("ERR_FILE_NOT_FOUND", "Input stream is null", null)
+        }
+      } catch (e: IOException) {
+        promise.reject("ERR_FILE_COPY_FAILED", "Failed to copy file: ${e.message}", e)
       }
     }
   }
