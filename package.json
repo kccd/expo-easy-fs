@@ -21,13 +21,13 @@
     "expo-easy-fs",
     "ExpoEasyFs"
   ],
-  "repository": "https://github.com/pxgo/expo-easy-fs",
+  "repository": "https://github.com/kccd/expo-easy-fs",
   "bugs": {
-    "url": "https://github.com/pxgo/expo-easy-fs/issues"
+    "url": "https://github.com/kccd/expo-easy-fs/issues"
   },
   "author": "pxgo <pengxiguaa@gmail.com> (https://github.com/pxgo)",
   "license": "MIT",
-  "homepage": "https://github.com/pxgo/expo-easy-fs#readme",
+  "homepage": "https://github.com/kccd/expo-easy-fs#readme",
   "dependencies": {},
   "devDependencies": {
     "@types/react": "^18.0.25",
