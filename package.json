@@ -1,6 +1,6 @@
 {
   "name": "expo-easy-fs",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A simple file operation tool for expo",
   "main": "build/index.js",
   "types": "build/index.d.ts",
