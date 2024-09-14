@@ -3,7 +3,11 @@ expo-easy-fs
 A simple file operation tool that supports only the Android platform. Used to supplement the missing features in [expo-file-system](https://www.npmjs.com/package/expo-file-system).
 
 ## Install
-npm install expo-easy-fs or yarn add expo-easy-fs
+```
+npm install expo-easy-fs
+// or 
+yarn add expo-easy-fs
+```
 
 ## API
 ### copyFileToDownload
