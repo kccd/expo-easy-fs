@@ -5,7 +5,9 @@ A simple file operation tool that supports only the Android platform. Used to su
 ## Install
 ```
 npm install expo-easy-fs
-// or 
+```
+or
+```
 yarn add expo-easy-fs
 ```
 
