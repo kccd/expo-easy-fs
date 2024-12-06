@@ -1,7 +1,7 @@
 {
   "name": "expo-easy-fs",
-  "version": "0.1.1",
-  "description": "A simple file operation tool for expo",
+  "version": "0.2.1",
+  "description": "A file utility for Expo to access the system Downloads folder, Android-only.",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "scripts": {
