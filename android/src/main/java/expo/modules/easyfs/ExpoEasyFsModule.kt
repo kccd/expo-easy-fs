@@ -5,11 +5,17 @@ import java.io.IOException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import android.os.Environment
-
+import android.os.Build
+import android.provider.MediaStore
 import android.content.ContentResolver
+import android.content.ContentValues
+import android.webkit.MimeTypeMap
+import android.Manifest
+import android.content.pm.PackageManager
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.io.FileInputStream
 
 class ExpoEasyFsModule : Module() {
 
@@ -170,37 +176,103 @@ class ExpoEasyFsModule : Module() {
 
 
 
-    AsyncFunction("copyFileToDownload") { uri: String, filename: String, promise: Promise ->
+    AsyncFunction("copyFileToDownload") { uriOrPath: String, filename: String, promise: Promise ->
+      // NOTE: This method now supports all Android versions:
+      //  - API < 29: direct file write to public Downloads (requires WRITE_EXTERNAL_STORAGE permission)
+      //  - API >=29: uses MediaStore Download collection (no legacy storage permission required)
       val reactContext = appContext.reactContext
-
       if (reactContext == null) {
         promise.reject("ERR_CONTEXT_NULL", "React context is null", null)
         return@AsyncFunction
       }
+
       try {
         val contentResolver: ContentResolver = reactContext.contentResolver
-        val inputStream: InputStream? = contentResolver.openInputStream(android.net.Uri.parse(uri))
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val file = File(downloadsDir, filename)
 
-        if (inputStream != null) {
-          val outputStream = FileOutputStream(file)
-          val buffer = ByteArray(1024)
-          var bytesRead: Int
+        // Get InputStream from either a content:// URI, file:// URI, or raw path
+        val inputStream: InputStream? = when {
+          uriOrPath.startsWith("content://") -> {
+            contentResolver.openInputStream(android.net.Uri.parse(uriOrPath))
+          }
+          uriOrPath.startsWith("file://") -> {
+            FileInputStream(uriOrPath.removePrefix("file://"))
+          }
+          else -> {
+            // treat as raw path
+            val f = File(uriOrPath)
+            if (f.exists()) FileInputStream(f) else null
+          }
+        }
 
-          while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-            outputStream.write(buffer, 0, bytesRead)
+        if (inputStream == null) {
+          promise.reject("ERR_FILE_NOT_FOUND", "Unable to open input stream for: $uriOrPath", null)
+          return@AsyncFunction
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          // Scoped storage path via MediaStore (Android 10+)
+          val downloadsCollection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+
+          val mimeType = guessMimeTypeFromName(filename)
+          val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+            // RELATIVE_PATH lets us specify Downloads root; you may append a subfolder e.g. "Downloads/myApp" by adding "/myApp"
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
           }
 
-          inputStream.close()
-          outputStream.close()
-          promise.resolve("File copied successfully to: ${file.absolutePath}")
+          val itemUri = contentResolver.insert(downloadsCollection, values)
+            ?: run {
+              promise.reject("ERR_MEDIASTORE_INSERT", "Failed to create download entry", null)
+              return@AsyncFunction
+            }
+
+          try {
+            contentResolver.openOutputStream(itemUri)?.use { output ->
+              inputStream.use { it.copyTo(output) }
+            } ?: run {
+              promise.reject("ERR_OPEN_OUTPUT", "Failed to open output stream in MediaStore", null)
+              return@AsyncFunction
+            }
+            // Mark as not pending so it's visible to user
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            contentResolver.update(itemUri, values, null, null)
+            promise.resolve("File saved to public Downloads via MediaStore URI: $itemUri")
+          } catch (e: Exception) {
+            promise.reject("ERR_MEDIASTORE_WRITE", e.message, e)
+          }
         } else {
-          promise.reject("ERR_FILE_NOT_FOUND", "Input stream is null", null)
+          // Legacy external storage write (Android 9 and below)
+          if (reactContext.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            promise.reject("ERR_PERMISSION_DENIED", "WRITE_EXTERNAL_STORAGE permission is required for API <29", null)
+            return@AsyncFunction
+          }
+
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!downloadsDir.exists()) downloadsDir.mkdirs()
+            val outFile = File(downloadsDir, filename)
+            try {
+              FileOutputStream(outFile).use { output ->
+                inputStream.use { it.copyTo(output) }
+              }
+              promise.resolve("File copied successfully to: ${outFile.absolutePath}")
+            } catch (e: IOException) {
+              promise.reject("ERR_FILE_COPY_FAILED", "Failed to copy file: ${e.message}", e)
+            }
         }
-      } catch (e: IOException) {
-        promise.reject("ERR_FILE_COPY_FAILED", "Failed to copy file: ${e.message}", e)
+      } catch (e: Exception) {
+        promise.reject("ERR_UNEXPECTED", e.message, e)
       }
     }
   }
+}
+
+// Helper to guess mime type (basic) based on filename
+private fun guessMimeTypeFromName(name: String): String {
+  val extension = name.substringAfterLast('.', "").lowercase()
+  if (extension.isEmpty()) return "application/octet-stream"
+  val map = MimeTypeMap.getSingleton()
+  return map.getMimeTypeFromExtension(extension) ?: "application/octet-stream"
 }
